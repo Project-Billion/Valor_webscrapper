@@ -10,6 +10,7 @@ load_dotenv()
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD") 
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 # --- Prices ---
@@ -127,7 +128,7 @@ def save_prices_to_redis() -> None:
     from datetime import datetime, timezone
 
     try:
-        r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+        r = redis.Redis(host=REDIS_HOST, password=REDIS_PASSWORD, port=REDIS_PORT, decode_responses=True)
         prices = fetch_all_prices()
         if not prices:
             print("Warning: No prices scraped. Skipping Redis update.")
@@ -199,7 +200,7 @@ def save_weather_to_redis() -> None:
             print("Skipping weather: OPENWEATHER_API_KEY not set in .env")
             return
 
-        r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+        r = redis.Redis(host=REDIS_HOST, password=REDIS_PASSWORD, port=REDIS_PORT, decode_responses=True)
         weather_list = fetch_all_weather()
         if not weather_list:
             print("Warning: No weather data fetched. Skipping Redis update.")
