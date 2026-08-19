@@ -8,6 +8,7 @@ from apscheduler.schedulers.background import BackgroundScheduler #changing Bloc
 
 # ===== KEKA =====
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import cast
@@ -225,6 +226,13 @@ async def lifespan(app: FastAPI):
     print("Scheduler shut down.")
 
 app = FastAPI(title="Bashaier & Weather API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:4200", "https://valor-labs.com/"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/api/v1/")
 def root():
