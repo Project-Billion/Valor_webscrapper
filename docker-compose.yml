@@ -1,5 +1,5 @@
 services:
-  webscraper:
+  scraper:
     build:
       context: .
       dockerfile: Dockerfile
