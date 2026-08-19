@@ -1,11 +1,12 @@
 services:
   scraper:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: webscraper
+    image: ghcr.io/project-billion/valor_webscrapper:latest
+    container_name: scraper
     restart: unless-stopped
-    ports:
-      - "8000:8000"
-    networks:
-        - production_valor_network
+
+    env_file:
+      - .env
+
+    volumes:
+      - ./output:/app/output
+      - ./logs:/app/logs
