@@ -238,7 +238,7 @@ def root():
         }
     }
 
-@app.get("/api/v1/prices")
+@app.get("/api/v1/scraper/prices")
 def get_prices():
     try:
         data = cast(str | None, redis_client.get(REDIS_PRICES_KEY))
@@ -249,7 +249,7 @@ def get_prices():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Redis error: {e}")
 
-@app.get("/api/v1/weather")
+@app.get("/api/v1/scraper/weather")
 def get_weather():
     try:
         data = cast(str | None, redis_client.get(REDIS_WEATHER_KEY))
@@ -263,14 +263,14 @@ def get_weather():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Redis error: {e}")
 
-@app.post("/api/v1/scrape/prices")
+@app.post("/api/v1/scraper/prices")
 def trigger_price_scrape(background_tasks: BackgroundTasks):
     # BackgroundTasks allows the API to return a 200 OK immediately 
     # while the heavy scraping task runs in a background thread.
     background_tasks.add_task(save_prices_to_redis)
     return {"message": "Price scrape triggered in the background."}
 
-@app.post("/api/v1/scrape/weather")
+@app.post("/api/v1/scraper/weather")
 def trigger_weather_scrape(background_tasks: BackgroundTasks):
     background_tasks.add_task(save_weather_to_redis)
     return {"message": "Weather scrape triggered in the background."}
