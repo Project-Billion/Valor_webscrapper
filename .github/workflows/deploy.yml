@@ -2,11 +2,12 @@ name: CD Pipeline
 
 on:
   push:
-    branches: [ prod ]
+    branches: [prod]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -22,16 +23,19 @@ jobs:
         run: |
           LOWER_REPO=$(echo "${{ github.repository }}" | tr '[A-Z]' '[a-z]')
           IMAGE_ID=ghcr.io/$LOWER_REPO
-          docker build -t $IMAGE_ID:latest ./
+
+          docker build -t $IMAGE_ID:latest .
           docker push $IMAGE_ID:latest
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_ACTOR: ${{ github.actor }}
       GITHUB_REPOSITORY: ${{ github.repository }}
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -43,29 +47,67 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           envs: GITHUB_TOKEN,GITHUB_ACTOR,GITHUB_REPOSITORY
+
           script: |
+            set -e
+
+            echo "Creating scraper directories..."
             mkdir -p ~/scraper/output
             mkdir -p ~/scraper/logs
 
+            echo "Writing environment file..."
             echo "${{ secrets.ENV_FILE_CONTENT }}" > ~/scraper/.env
 
-            echo "$GITHUB_TOKEN" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+            echo "Logging into GHCR..."
+            echo "$GITHUB_TOKEN" | docker login ghcr.io \
+              -u "$GITHUB_ACTOR" \
+              --password-stdin
 
             LOWER_REPO=$(echo "$GITHUB_REPOSITORY" | tr '[A-Z]' '[a-z]')
             IMAGE_ID=ghcr.io/$LOWER_REPO
 
-            docker pull $IMAGE_ID:latest
+            echo "Pulling latest image..."
+            docker pull "$IMAGE_ID:latest"
 
-            docker stop scraper || true
-            docker rm scraper || true
+            cd ~/scraper
 
-            docker run -d \
-              --name scraper \
-              --restart always \
-              --env-file ~/scraper/.env \
-              -v ~/scraper/output:/app/output \
-              -v ~/scraper/logs:/app/logs \
-              --network=production_valor_network \
-              $IMAGE_ID:latest
+            echo "Creating docker-compose.yml..."
 
+            cat > docker-compose.yml <<EOF
+            services:
+              webscraper:
+                image: $IMAGE_ID:latest
+                container_name: scraper
+                restart: unless-stopped
+
+                env_file:
+                  - .env
+
+                volumes:
+                  - ./output:/app/output
+                  - ./logs:/app/logs
+
+                networks:
+                  - production_valor_network
+
+                ports:
+                  - "8000:8000"
+
+            networks:
+              production_valor_network:
+                external: true
+            EOF
+
+            echo "Starting scraper..."
+
+            docker compose pull
+            docker compose up -d
+
+            echo "Removing unused images..."
             docker image prune -f
+
+            echo "Scraper status:"
+            docker compose ps
+
+            echo "Scraper logs:"
+            docker compose logs --tail=50
