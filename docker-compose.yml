@@ -1,0 +1,11 @@
+services:
+  webscraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: webscraper
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    networks:
+        - production_valor_network
