@@ -8,6 +8,7 @@ This document provides comprehensive documentation for the FastAPI application t
 * **Interactive Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
 * **OpenAPI schema:** [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
 * **ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
+* **Frontend integration guide:** [FRONTEND_API_DOCUMENTATION.md](FRONTEND_API_DOCUMENTATION.md)
 
 ---
 
