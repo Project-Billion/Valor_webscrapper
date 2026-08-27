@@ -250,10 +250,12 @@ The application uses **APScheduler** to automate data collection.
 
 When the FastAPI application starts:
 
-1. It immediately fetches prices from Bashaier.
-2. It immediately fetches weather data from OpenWeatherMap.
-3. It stores both datasets in Redis.
-4. It starts a background scheduler.
+1. It starts serving API requests without waiting for upstream network calls.
+2. It starts the background scheduler.
+3. It queues initial price and weather refreshes on scheduler worker threads.
+4. Each successful refresh atomically replaces its Redis list and timestamp.
+
+Redis distributed locks prevent scheduled and manually triggered refreshes from running concurrently. Incomplete refreshes are rejected so they do not replace the last complete dataset.
 
 ### Scheduled Updates
 
@@ -282,10 +284,14 @@ POST /api/v1/scraper/weather
 
 | Redis Key | Description |
 | :--- | :--- |
-| `bashaier:prices` | Stores the latest scraped agricultural prices as JSON. |
+| `bashaier:prices:items:v2` | Redis list containing one JSON agricultural price per entry. |
 | `bashaier:prices:last_updated` | Stores the UTC timestamp of the last successful price update. |
-| `egypt:weather` | Stores the latest weather data for Egyptian governorates as JSON. |
+| `bashaier:prices:refresh:lock` | Temporary distributed lock for price refreshes. |
+| `egypt:weather:items:v2` | Redis list containing one JSON weather observation per entry. |
 | `egypt:weather:last_updated` | Stores the UTC timestamp of the last successful weather update. |
+| `egypt:weather:refresh:lock` | Temporary distributed lock for weather refreshes. |
+
+The API can read the legacy `bashaier:prices` and `egypt:weather` JSON keys until the first successful refresh migrates each dataset to its list key.
 
 ---
 
@@ -297,7 +303,14 @@ The application expects the following environment variables:
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=
+REDIS_CONNECT_TIMEOUT_SECONDS=3
+REDIS_SOCKET_TIMEOUT_SECONDS=5
 OPENWEATHER_API_KEY=your_openweather_api_key
+HTTP_TIMEOUT_SECONDS=15
+HTTP_MAX_ATTEMPTS=3
+HTTP_RETRY_BACKOFF_SECONDS=0.5
+SCRAPE_MAX_WORKERS=5
+SCRAPE_LOCK_TIMEOUT_SECONDS=1800
 ```
 
 | Variable | Required | Description |
@@ -305,7 +318,14 @@ OPENWEATHER_API_KEY=your_openweather_api_key
 | `REDIS_HOST` | Optional | Redis host. Defaults to `localhost`. |
 | `REDIS_PORT` | Optional | Redis port. Defaults to `6379`. |
 | `REDIS_PASSWORD` | Optional | Redis password if authentication is enabled. |
+| `REDIS_CONNECT_TIMEOUT_SECONDS` | Optional | Maximum Redis connection wait. Defaults to `3`. |
+| `REDIS_SOCKET_TIMEOUT_SECONDS` | Optional | Maximum Redis socket operation wait. Defaults to `5`. |
 | `OPENWEATHER_API_KEY` | Required for weather | API key for OpenWeatherMap. |
+| `HTTP_TIMEOUT_SECONDS` | Optional | Per-operation upstream HTTP timeout. Defaults to `15`. |
+| `HTTP_MAX_ATTEMPTS` | Optional | Maximum attempts for transient upstream failures. Defaults to `3`. |
+| `HTTP_RETRY_BACKOFF_SECONDS` | Optional | Initial exponential-backoff delay. Defaults to `0.5`. |
+| `SCRAPE_MAX_WORKERS` | Optional | Maximum concurrent requests per scraper. Defaults to `5`. |
+| `SCRAPE_LOCK_TIMEOUT_SECONDS` | Optional | Distributed refresh-lock lifetime. Defaults to `1800`. |
 
 ---
 
@@ -327,4 +347,10 @@ The API will be available at:
 
 ```text
 http://localhost:8000
+```
+
+## Running Tests
+
+```bash
+python -m unittest discover -v
 ```
