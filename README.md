@@ -6,6 +6,7 @@ This document provides comprehensive documentation for the FastAPI application t
 
 * **Base URL:** `http://localhost:8000`
 * **Interactive Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
+* **OpenAPI schema:** [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
 * **ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
 ---
@@ -14,11 +15,11 @@ This document provides comprehensive documentation for the FastAPI application t
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/` | API information and available endpoints. |
-| `GET` | `/prices` | Retrieve cached agricultural prices from Redis. |
-| `GET` | `/weather` | Retrieve cached weather data for Egyptian governorates. |
-| `POST` | `/scrape/prices` | Manually trigger a price scrape. Runs in the background. |
-| `POST` | `/scrape/weather` | Manually trigger a weather fetch. Runs in the background. |
+| `GET` | `/api/v1/` | API information and available endpoints. |
+| `GET` | `/api/v1/scraper/prices` | Retrieve paginated agricultural prices from Redis. |
+| `GET` | `/api/v1/scraper/weather` | Retrieve paginated weather data for Egyptian governorates. |
+| `POST` | `/api/v1/scraper/prices` | Manually trigger a price scrape. Runs in the background. |
+| `POST` | `/api/v1/scraper/weather` | Manually trigger a weather fetch. Runs in the background. |
 
 ---
 
@@ -26,7 +27,7 @@ This document provides comprehensive documentation for the FastAPI application t
 
 ### 1. API Root
 
-**`GET /`**
+**`GET /api/v1/`**
 
 Returns basic information about the API and a list of available endpoints.
 
@@ -36,10 +37,10 @@ Returns basic information about the API and a list of available endpoints.
 {
   "message": "Welcome to Bashaier & Egypt Weather API",
   "endpoints": {
-    "prices": "/prices",
-    "weather": "/weather",
-    "scrape_prices": "/scrape/prices (POST)",
-    "scrape_weather": "/scrape/weather (POST)"
+    "prices": "/api/v1/scraper/prices",
+    "weather": "/api/v1/scraper/weather",
+    "scrape_prices": "/api/v1/scraper/prices (POST)",
+    "scrape_weather": "/api/v1/scraper/weather (POST)"
   }
 }
 ```
@@ -48,11 +49,24 @@ Returns basic information about the API and a list of available endpoints.
 
 ### 2. Get Prices
 
-**`GET /prices`**
+**`GET /api/v1/scraper/prices`**
 
-Retrieves the latest cached agricultural prices from Redis.
+Retrieves one page of the latest cached agricultural prices from Redis.
 
-The data is updated automatically every 24 hours or when manually triggered using `POST /scrape/prices`.
+The data is updated automatically every 24 hours or when manually triggered using `POST /api/v1/scraper/prices`.
+
+**Query Parameters:**
+
+| Name | Type | Default | Constraints | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `page` | integer | `1` | Minimum `1` | Page number to return. |
+| `page_size` | integer | `20` | From `1` to `100` | Maximum items returned per page. |
+
+Example request:
+
+```http
+GET /api/v1/scraper/prices?page=2&page_size=20
+```
 
 **Response Example:**
 
@@ -72,6 +86,12 @@ The data is updated automatically every 24 hours or when manually triggered usin
       "average_price": 875.00
     }
   ],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total_items": 125,
+    "total_pages": 7
+  },
   "last_updated": "2026-08-13T14:30:00.123456+00:00"
 }
 ```
@@ -81,23 +101,44 @@ The data is updated automatically every 24 hours or when manually triggered usin
 ```json
 {
   "prices": [],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total_items": 0,
+    "total_pages": 0
+  },
   "last_updated": null
 }
 ```
 
 **Error Responses:**
 
-* `500 Internal Server Error`: Failed to connect to Redis.
+* `422 Unprocessable Content`: `page` or `page_size` is outside its allowed range.
+* `500 Internal Server Error`: Cached data is malformed or fails response validation.
+* `503 Service Unavailable`: Redis is unavailable. The response includes `Retry-After: 30`.
 
 ---
 
 ### 3. Get Weather
 
-**`GET /weather`**
+**`GET /api/v1/scraper/weather`**
 
-Retrieves the latest cached weather data for all configured Egyptian governorates from Redis.
+Retrieves one page of the latest cached weather data for configured Egyptian governorates from Redis.
 
-The data is updated automatically every 24 hours or when manually triggered using `POST /scrape/weather`.
+The data is updated automatically every 24 hours or when manually triggered using `POST /api/v1/scraper/weather`.
+
+**Query Parameters:**
+
+| Name | Type | Default | Constraints | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `page` | integer | `1` | Minimum `1` | Page number to return. |
+| `page_size` | integer | `20` | From `1` to `100` | Maximum items returned per page. |
+
+Example request:
+
+```http
+GET /api/v1/scraper/weather?page=1&page_size=10
+```
 
 **Response Example:**
 
@@ -127,6 +168,12 @@ The data is updated automatically every 24 hours or when manually triggered usin
       "visibility": 10000
     }
   ],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total_items": 27,
+    "total_pages": 2
+  },
   "last_updated": "2026-08-13T14:30:05.654321+00:00"
 }
 ```
@@ -136,25 +183,35 @@ The data is updated automatically every 24 hours or when manually triggered usin
 ```json
 {
   "weather": [],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total_items": 0,
+    "total_pages": 0
+  },
   "last_updated": null
 }
 ```
 
 **Error Responses:**
 
-* `500 Internal Server Error`: Failed to connect to Redis.
+* `422 Unprocessable Content`: `page` or `page_size` is outside its allowed range.
+* `500 Internal Server Error`: Cached data is malformed or fails response validation.
+* `503 Service Unavailable`: Redis is unavailable. The response includes `Retry-After: 30`.
 
 ---
 
 ### 4. Trigger Price Scrape
 
-**`POST /scrape/prices`**
+**`POST /api/v1/scraper/prices`**
 
 Manually triggers the web scraper to fetch the latest prices from Bashaier.
 
 Because scraping may take time, this endpoint immediately returns a response and runs the scraping process in a background task.
 
 **Response Example:**
+
+Status: `202 Accepted`
 
 ```json
 {
@@ -166,13 +223,15 @@ Because scraping may take time, this endpoint immediately returns a response and
 
 ### 5. Trigger Weather Fetch
 
-**`POST /scrape/weather`**
+**`POST /api/v1/scraper/weather`**
 
 Manually triggers the weather fetching process for all Egyptian governorates.
 
 Because fetching weather for multiple governorates may take time, this endpoint immediately returns a response and runs the task in the background.
 
 **Response Example:**
+
+Status: `202 Accepted`
 
 ```json
 {
@@ -207,13 +266,13 @@ The following jobs run automatically every **24 hours**:
 You can manually refresh the data at any time using:
 
 ```http
-POST /scrape/prices
+POST /api/v1/scraper/prices
 ```
 
 or
 
 ```http
-POST /scrape/weather
+POST /api/v1/scraper/weather
 ```
 
 ---
@@ -260,7 +319,7 @@ pip install fastapi uvicorn apscheduler httpx beautifulsoup4 redis python-dotenv
 Run the API:
 
 ```bash
-uvicorn main:app --reload
+uvicorn app:app --reload
 ```
 
 The API will be available at:
